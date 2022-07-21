@@ -5,4 +5,4 @@ Credit to [@K4CZP3R](https://github.com/K4CZP3R) for [reverse engineering the Ta
 
 ## License
 
-Distributed under the [Unlicence](https://unlicense.org) License
+This project is [unlicensed](https://unlicense.org) License
