@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"github.com/phillipahereza/tapo"
 	"log"
 )
@@ -17,5 +16,5 @@ func main() {
 		log.Fatal(err)
 	}
 
-	fmt.Println(key)
+	_ = plug.DecodeHandshake(key)
 }

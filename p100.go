@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -24,6 +25,7 @@ type P100 struct {
 	SessionID  string
 	PrivateKey *rsa.PrivateKey
 	client     *http.Client
+	tpCrypto   *tpLinkCrypto
 }
 
 type params struct {
@@ -61,7 +63,7 @@ func (p *P100) generateKeyPair() error {
 
 func (p P100) Handshake() (string, error) {
 	url := fmt.Sprintf("http://%s/app", p.IP)
-	pubKey, err := exportRsaPublicKeyAsPemStr(p.PrivateKey.Public())
+	pubKey, err := exportRsaPublicKeyAsPEMString(p.PrivateKey.Public())
 	if err != nil {
 		return "", err
 	}
@@ -116,6 +118,32 @@ func (p P100) Handshake() (string, error) {
 	return httpResp.Result.Key, nil
 }
 
+func (p P100) DecodeHandshake(key string) error {
+	decodedKey, err := base64.StdEncoding.DecodeString(key)
+	if err != nil {
+		return err
+	}
+	_ = decodedKey
+
+	decryptedKey, err := rsa.DecryptPKCS1v15(rand.Reader, p.PrivateKey, decodedKey)
+	if err != nil {
+		return err
+	}
+
+	secretKey := decryptedKey[:16]
+	iv := decryptedKey[16:]
+
+	tpCrypto, err := NewCrypto(secretKey, iv)
+	if err != nil {
+		return err
+	}
+
+	p.tpCrypto = tpCrypto
+
+	return nil
+
+}
+
 func NewP100(ip, email, password string) (*P100, error) {
 	plug := &P100{
 		IP:       ip,
@@ -130,7 +158,7 @@ func NewP100(ip, email, password string) (*P100, error) {
 	return plug, nil
 }
 
-func exportRsaPublicKeyAsPemStr(pubkey crypto.PublicKey) ([]byte, error) {
+func exportRsaPublicKeyAsPEMString(pubkey crypto.PublicKey) ([]byte, error) {
 	pubkeyBytes, err := x509.MarshalPKIXPublicKey(pubkey)
 	if err != nil {
 		return nil, err
@@ -144,6 +172,17 @@ func exportRsaPublicKeyAsPemStr(pubkey crypto.PublicKey) ([]byte, error) {
 
 	return pubkeyPem, nil
 }
+
+//func ExportRsaPrivateKeyAsPEMString(privkey *rsa.PrivateKey) string {
+//	privateKeyBytes := x509.MarshalPKCS1PrivateKey(privkey)
+//	privateKeyPEM := pem.EncodeToMemory(
+//		&pem.Block{
+//			Type:  "RSA PRIVATE KEY",
+//			Bytes: privateKeyBytes,
+//		},
+//	)
+//	return string(privateKeyPEM)
+//}
 
 // https://cyberspy.io/articles/crypto101/
 // https://medium.com/asecuritysite-when-bob-met-alice/golang-and-cryptography-914db9d7069f
