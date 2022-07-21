@@ -13,6 +13,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -20,7 +21,7 @@ type P100 struct {
 	IP         string
 	Email      string
 	Password   string
-	Session    string
+	SessionID  string
 	PrivateKey *rsa.PrivateKey
 	client     *http.Client
 }
@@ -102,6 +103,14 @@ func (p P100) Handshake() (string, error) {
 
 	if httpResp.Error != 0 {
 		return "", errors.New("some error occurred")
+	}
+
+	header := resp.Header.Get("Set-Cookie")
+	parts := strings.Split(header, ";")
+	if len(parts) > 0 {
+		p.SessionID = parts[0]
+	} else {
+		return "", errors.New("TP_SESSIONID not received")
 	}
 
 	return httpResp.Result.Key, nil
