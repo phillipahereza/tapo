@@ -6,11 +6,11 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"time"
@@ -41,6 +41,13 @@ type payload struct {
 	TerminalUUID    string  `json:"terminalUUID,omitempty"`
 }
 
+type response struct {
+	Error  int64 `json:"error_code"`
+	Result struct {
+		Key string `json:"key"`
+	} `json:"result"`
+}
+
 func (p *P100) generateKeyPair() error {
 	privateKey, err := rsa.GenerateKey(rand.Reader, 1024)
 	if err != nil {
@@ -51,15 +58,12 @@ func (p *P100) generateKeyPair() error {
 	return nil
 }
 
-func (p P100) Handshake() error {
+func (p P100) Handshake() (string, error) {
 	url := fmt.Sprintf("http://%s/app", p.IP)
 	pubKey, err := exportRsaPublicKeyAsPemStr(p.PrivateKey.Public())
 	if err != nil {
-		return err
+		return "", err
 	}
-
-	encodedPubKey := base64.StdEncoding.EncodeToString(pubKey)
-	_ = encodedPubKey
 
 	pLoad := payload{
 		Method: "handshake",
@@ -71,32 +75,36 @@ func (p P100) Handshake() error {
 
 	data, err := json.Marshal(pLoad)
 	if err != nil {
-		return err
+		return "", err
 	}
-
-	fmt.Println(string(data))
 
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(data))
 
-	response, err := p.client.Do(req)
+	resp, err := p.client.Do(req)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	defer func() {
-		_ = response.Body.Close()
+		_ = resp.Body.Close()
 	}()
 
-	fmt.Println(response.Status)
-
-	body, err := ioutil.ReadAll(response.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Println(string(body))
+	var httpResp response
 
-	return nil
+	if err = json.Unmarshal(body, &httpResp); err != nil {
+		return "", err
+	}
+
+	if httpResp.Error != 0 {
+		return "", errors.New("some error occurred")
+	}
+
+	return httpResp.Result.Key, nil
 }
 
 func NewP100(ip, email, password string) (*P100, error) {
@@ -120,7 +128,7 @@ func exportRsaPublicKeyAsPemStr(pubkey crypto.PublicKey) ([]byte, error) {
 	}
 	pubkeyPem := pem.EncodeToMemory(
 		&pem.Block{
-			Type:  "RSA PUBLIC KEY",
+			Type:  "PUBLIC KEY",
 			Bytes: pubkeyBytes,
 		},
 	)
@@ -131,4 +139,3 @@ func exportRsaPublicKeyAsPemStr(pubkey crypto.PublicKey) ([]byte, error) {
 // https://cyberspy.io/articles/crypto101/
 // https://medium.com/asecuritysite-when-bob-met-alice/golang-and-cryptography-914db9d7069f
 // https://wgallagher86.medium.com/pkcs-7-padding-in-go-6da5d1d14590
-
