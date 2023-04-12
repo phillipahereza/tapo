@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Create IMAGE_TAG from GitHub SHA
-        if: github.ref == 'refs/heads/master'
+        if: github.ref == 'refs/heads/main'
         run: |
           echo "IMAGE_TAG=`git rev-parse --short HEAD`" >> $GITHUB_ENV
 
