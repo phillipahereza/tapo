@@ -9,6 +9,9 @@ jobs:
   Do-Something:
     runs-on: ubuntu-latest
     steps:
+      - name: Check out the code
+        uses: actions/checkout@v3
+        
       - name: Create IMAGE_TAG from GitHub SHA
         if: github.ref == 'refs/heads/main'
         run: |
